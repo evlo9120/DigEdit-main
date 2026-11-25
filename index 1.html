@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>DigEdit</title>
+<style>
+:root{--bg:#16161c;--panel:#1c1d25;--card:#22232d;--line:#3a3c4c;--text:#f2f2f6;--sub:#9a9cab;--sel:#4da3ff;--match:#4a4320;--grid:#1f2029;--reply:#a8a8b8;--agree:#4fb3f0;--disagree:#ff9f43}
+body.hc{--bg:#000;--panel:#000;--card:#000;--line:#fff;--text:#fff;--sub:#ffff66;--sel:#0ff;--match:#444400;--grid:#222;--reply:#fff;--agree:#56B4E9;--disagree:#FFA040}
+[hidden]{display:none!important}
+html,body{height:100%;margin:0}
+body{display:grid;grid-template-rows:auto 1fr auto;background:var(--bg);color:var(--text);font:14px/1.4 system-ui,-apple-system,"Segoe UI",sans-serif}
+button,input,select,textarea{font:inherit;color:var(--text)}
+button{background:var(--card);border:1px solid var(--line);border-radius:8px;padding:7px 13px;cursor:pointer}
+button:hover:not(:disabled){border-color:var(--sel)}
+button:disabled{opacity:.45;cursor:default}
+:focus-visible{outline:2px solid var(--sel);outline-offset:2px}
+input,select,textarea{background:var(--bg);border:1px solid var(--line);border-radius:8px;padding:7px 10px;box-sizing:border-box}
+#tb{padding:8px 12px;background:var(--panel);border-bottom:1px solid var(--line);display:flex;flex-direction:column;gap:8px}
+.row{display:flex;flex-wrap:wrap;gap:8px;align-items:center}
+.sr{margin-left:auto}
+main{display:grid;grid-template-columns:1fr 340px;min-height:0}
+#scroll{overflow:auto;position:relative;min-width:0}
+#scroll.linking{cursor:crosshair}
+#sizer{position:relative}
+#world{position:absolute;left:0;top:0;transform-origin:0 0;background-image:linear-gradient(var(--grid) 1px,transparent 1px),linear-gradient(90deg,var(--grid) 1px,transparent 1px);background-size:40px 40px}
+#links{position:absolute;left:0;top:0;width:100%;height:100%;overflow:visible;pointer-events:none}
+#cards{position:absolute;inset:0;pointer-events:none}
+#empty{position:absolute;left:60px;top:60px;color:var(--sub);font-size:15px}
+.card{position:absolute;width:210px;height:66px;box-sizing:border-box;padding:8px 10px;border:1.2px solid var(--line);border-radius:14px;background:var(--card);overflow:hidden;pointer-events:auto;touch-action:none;cursor:grab;user-select:none}
+.card b,.card i,.card span{display:block;white-space:nowrap;overflow:hidden;text-overflow:ellipsis}
+.card b{font-size:13px}.card i{font-style:normal;font-size:11.5px;color:var(--sub)}.card span{font-size:11.5px}
+.card.sel{border-color:var(--sel);box-shadow:0 0 0 2px var(--sel)}
+.card.hit{background:var(--match)}.card.dim{opacity:.3}
+.card.src{outline:2px dashed var(--sel);outline-offset:4px}
+.lk line{stroke:currentColor;stroke-width:2}.lk polygon{fill:currentColor}
+.lk .hitl{stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer}
+.lk.AGREE .vis{stroke-width:3}.lk.DISAGREE .vis{stroke-dasharray:9 6}
+.lk .halo{stroke:var(--sel);stroke-opacity:.35;stroke-width:9;stroke-linecap:round}
+.lk.REPLY{color:var(--reply)}.lk.AGREE{color:var(--agree)}.lk.DISAGREE{color:var(--disagree)}
+.rb{stroke:var(--sel);stroke-width:2;stroke-dasharray:4 6}
+#side{border-left:1px solid var(--line);background:var(--panel);padding:14px;overflow:auto;display:flex;flex-direction:column;gap:12px}
+#dt{margin:0;font-size:22px}#dm{color:var(--sub)}#db{white-space:pre-wrap}
+.box{border:1px solid var(--line);border-radius:10px;padding:12px;display:flex;flex-direction:column;gap:6px;min-height:48px}
+.cn{text-align:left;border:0;background:none;padding:4px 0;color:var(--sel)}
+#dbtn{display:flex;flex-direction:column;gap:6px}
+.lg{display:flex;align-items:center;gap:10px}
+footer{display:flex;justify-content:space-between;gap:12px;padding:6px 12px;border-top:1px solid var(--line);background:var(--panel);color:var(--sub);font-size:13px}
+#menu{position:fixed;z-index:50;display:flex;flex-direction:column;min-width:180px;background:var(--panel);border:1px solid var(--line);border-radius:10px;padding:4px}
+#menu button{border:0;background:none;text-align:left}
+#menu button:hover{background:var(--card)}
+dialog{background:var(--panel);color:var(--text);border:1px solid var(--line);border-radius:12px;padding:20px;width:min(440px,92vw)}
+dialog::backdrop{background:#0009}
+dialog h2{margin:0 0 8px;font-size:18px}
+dialog label{display:block;margin-top:10px}
+dialog input,dialog select,dialog textarea{width:100%;margin-top:4px}
+.err{color:#ff7b7b;min-height:20px;margin-top:8px}
+.btns{display:flex;justify-content:flex-end;gap:8px}
+.pri{background:var(--sel);border-color:var(--sel);color:#04101f}
+@media(max-width:800px){main{grid-template-columns:1fr;grid-template-rows:1fr 260px}#side{border-left:0;border-top:1px solid var(--line)}}
+</style>
+</head>
+<body>
+<header id="tb">
+ <div class="row">
+  <label>Discussion <select id="disc"></select></label>
+  <button data-a="newDisc">New discussion</button><button data-a="renDisc">Rename</button><button data-a="delDisc">Delete discussion</button>
+  <button data-a="newPost">New post</button><button data-a="reply" data-n="p">Reply</button><button data-a="link" data-n="p">Link…</button><button data-a="edit" data-n="p">Edit</button><button data-a="del" data-n="s">Delete</button>
+  <button data-a="undo" id="undo">Undo</button>
+ </div>
+ <div class="row">
+  <button data-a="zout" aria-label="Zoom out">−</button><button data-a="zin" aria-label="Zoom in">+</button>
+  <button data-a="exp">Export</button><button data-a="imp">Import</button>
+  <label><input type="checkbox" id="hc"> High contrast</label>
+  <label class="sr">Search <input id="q" type="search" placeholder="Title, author or text"></label>
+ </div>
+</header>
+<main>
+ <div id="scroll"><div id="sizer"><div id="world"><svg id="links" aria-hidden="true"></svg><div id="cards"></div><div id="empty" hidden>This discussion is empty. Double-click anywhere to add the first post.</div></div></div></div>
+ <aside id="side">
+  <h2 id="dt"></h2><div id="dm"></div><div id="db"></div>
+  <div class="box">Connections (click to go there):<div id="cn"></div></div>
+  <div id="dbtn"></div>
+  <div class="box"><b>Legend</b>
+   <div class="lg"><svg width="50" height="8"><line x1="0" y1="4" x2="50" y2="4" style="stroke:var(--reply);stroke-width:2"/></svg>Reply to</div>
+   <div class="lg"><svg width="50" height="8"><line x1="0" y1="4" x2="50" y2="4" style="stroke:var(--agree);stroke-width:3"/></svg>Agrees with</div>
+   <div class="lg"><svg width="50" height="8"><line x1="0" y1="4" x2="50" y2="4" style="stroke:var(--disagree);stroke-width:2;stroke-dasharray:9 6"/></svg>Disagrees with</div>
+  </div>
+ </aside>
+</main>
+<footer><span id="status"></span><span id="stats"></span></footer>
+<div id="menu" hidden></div>
+<dialog id="dlg"><form id="f"></form></dialog>
+<input type="file" id="file" accept=".json,application/json" hidden>
+<script>
+const NW=210,NH=66,LT={REPLY:'Reply to',AGREE:'Agrees with',DISAGREE:'Disagrees with'},KEY='digedit.v1';
+const $=i=>document.getElementById(i),esc=s=>String(s).replace(/[&<>"]/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[c]));
+const pad=n=>String(n).padStart(2,'0');
+const now=()=>{const d=new Date();return `${d.getFullYear()}-${pad(d.getMonth()+1)}-${pad(d.getDate())} ${pad(d.getHours())}:${pad(d.getMinutes())}`};
+let S,curId,sel=null,zoom=1,q='',undoSt=[],linkSrc=null,mouse=null,lastAuthor='',drag=null,zTop=1;
+
+function seed(){
+ const raw=[["Should CSUN switch to a 4-day class week?",[
+  ["Maria G.","Proposal: 4-day week","Move all M/W/F classes to Mon-Thu with longer sessions. Fridays become open lab and office-hour days.",380,40],
+  ["Kevin T.","Commuters would love this","I drive 50 minutes each way. One less day on the 405 is a huge quality-of-life win.",120,190],
+  ["Priya S.","Longer classes hurt focus","Attention drops off after about an hour. 2-hour lectures would need built-in breaks.",400,200],
+  ["Jordan L.","What about lab sections?","Labs are already 3 hours. Where do they fit if Friday is gone?",680,190],
+  ["Kevin T.","Breaks solve that","A 10-minute break halfway through fixes the focus problem. Plenty of grad classes do this.",260,350],
+  ["Alex R.","Friday labs could stay","Keep labs on Friday, move only lectures. Best of both.",650,350],
+  ["Priya S.","Breaks help, but not enough","Breaks help, but 4 long days in a row is still exhausting for students who also work.",260,500]],
+  [[1,0,"AGREE"],[2,0,"DISAGREE"],[3,0,"REPLY"],[4,2,"DISAGREE"],[5,3,"REPLY"],[6,4,"DISAGREE"]]],
+ ["Best first programming language",[
+  ["Sam K.","Python first, always","Readable syntax, huge ecosystem, and students see results fast.",360,40],
+  ["Dana W.","Java teaches fundamentals","Static types and explicit structure make concepts like classes and interfaces stick.",110,200],
+  ["Chris M.","Agree on Python","Our intro class switched to Python and pass rates went up.",400,200],
+  ["Lee H.","What about JavaScript?","Everyone uses a browser. Instant visual feedback is motivating.",680,200],
+  ["Sam K.","Types can come later","Learn to think in steps first, then learn type systems in the second course.",140,360]],
+  [[1,0,"DISAGREE"],[2,0,"AGREE"],[3,0,"REPLY"],[4,1,"DISAGREE"]]]];
+ const s={next:1,discs:[]};
+ raw.forEach(([title,ps,ls])=>{const d={id:s.next++,title,posts:[],links:[]};
+  ps.forEach(([author,t,body,x,y])=>d.posts.push({id:s.next++,author,title:t,body,createdAt:now(),x,y}));
+  ls.forEach(([a,b,type])=>d.links.push({id:s.next++,from:d.posts[a].id,to:d.posts[b].id,type}));
+  s.discs.push(d)});
+ return s}
+function load(){try{S=JSON.parse(localStorage.getItem(KEY))}catch(e){S=null}
+ if(!S||!Array.isArray(S.discs)||!S.discs.length)S=seed();curId=S.discs[0].id}
+const save=()=>{try{localStorage.setItem(KEY,JSON.stringify(S))}catch(e){}};
+const D=()=>S.discs.find(d=>d.id===curId),P=id=>D().posts.find(p=>p.id===id);
+const say=s=>{$('status').textContent=s};
+const ctr=p=>({x:p.x+NW/2,y:p.y+NH/2});
+function edge(p,t){const c=ctr(p),dx=t.x-c.x,dy=t.y-c.y;if(!dx&&!dy)return c;const s=Math.min(dx?NW/2/Math.abs(dx):1e9,dy?NH/2/Math.abs(dy):1e9);return{x:c.x+dx*s,y:c.y+dy*s}}
+function seg(l){const f=P(l.from),t=P(l.to);return f&&t?{a:edge(f,ctr(t)),b:edge(t,ctr(f))}:null}
+const match=p=>!q||[p.title,p.author,p.body].some(s=>s.toLowerCase().includes(q));
+
+const snap=()=>JSON.stringify(S);
+function push(label,before=snap()){undoSt.push({label,before});if(undoSt.length>100)undoSt.shift()}
+function undo(){const u=undoSt.pop();if(!u)return;S=JSON.parse(u.before);if(!S.discs.some(d=>d.id===curId))curId=S.discs[0].id;sel=null;save();draw();say('Undid: '+u.label.toLowerCase()+'.')}
+const after=()=>{save();draw()};
+
+function draw(){
+ $('disc').innerHTML=S.discs.map(d=>`<option value="${d.id}"${d.id===curId?' selected':''}>${esc(d.title)}</option>`).join('');
+ document.title='DigEdit — '+D().title;
+ $('cards').innerHTML=D().posts.map(p=>`<div class="card" data-id="${p.id}"><b>${esc(p.title)}</b><i>${esc(p.author)}</i><span>${esc(p.body.replace(/\n/g,' '))}</span></div>`).join('');
+ $('empty').hidden=D().posts.length>0;
+ paint();size();details();acts()}
+function paint(){
+ document.querySelectorAll('.card').forEach(c=>{const id=+c.dataset.id,p=P(id);
+  c.classList.toggle('sel',sel?.k==='p'&&sel.id===id);c.classList.toggle('src',linkSrc===id);
+  c.classList.toggle('hit',!!q&&match(p));c.classList.toggle('dim',!!q&&!match(p));
+  c.style.left=p.x+'px';c.style.top=p.y+'px'});
+ links();stats()}
+function links(){let h='';
+ for(const l of D().links){const s=seg(l);if(!s)continue;
+  const on=sel?.k==='l'&&sel.id===l.id,dim=q&&!(match(P(l.from))&&match(P(l.to))),an=Math.atan2(s.b.y-s.a.y,s.b.x-s.a.x);
+  const hd=[0,-.4,.4].map((o,i)=>i?`${s.b.x-12*Math.cos(an+o)},${s.b.y-12*Math.sin(an+o)}`:`${s.b.x},${s.b.y}`).join(' ');
+  const ln=c=>`<line class="${c}" x1="${s.a.x}" y1="${s.a.y}" x2="${s.b.x}" y2="${s.b.y}"/>`;
+  h+=`<g class="lk ${l.type}" data-id="${l.id}" style="opacity:${dim?.25:1}">${ln('hitl')}${on?ln('halo'):''}${ln('vis')}<polygon points="${hd}"/></g>`}
+ if(linkSrc!=null&&mouse){const c=ctr(P(linkSrc));h+=`<line class="rb" x1="${c.x}" y1="${c.y}" x2="${mouse.x}" y2="${mouse.y}"/>`}
+ $('links').innerHTML=h}
+function size(){let mx=600,my=400;D().posts.forEach(p=>{mx=Math.max(mx,p.x+NW+80);my=Math.max(my,p.y+NH+80)});
+ const sc=$('scroll'),w=Math.max(mx,sc.clientWidth/zoom),h=Math.max(my,sc.clientHeight/zoom);
+ $('world').style.cssText=`width:${w}px;height:${h}px;transform:scale(${zoom})`;
+ $('sizer').style.width=w*zoom+'px';$('sizer').style.height=h*zoom+'px'}
+function setZoom(z){zoom=Math.max(.5,Math.min(2.5,z));size();stats()}
+const stats=()=>{$('stats').textContent=`${D().posts.length} posts · ${D().links.length} connections · Zoom ${Math.round(zoom*100)}%`};
+function pick(k,id,reveal){sel=k?{k,id}:null;paint();details();acts();
+ if(reveal&&k==='p')document.querySelector(`.card[data-id="${id}"]`)?.scrollIntoView({block:'nearest',inline:'nearest'})}
+function acts(){const p=sel?.k==='p';
+ document.querySelectorAll('[data-n]').forEach(b=>b.disabled=b.dataset.n==='p'?!p:!sel);
+ const u=$('undo');u.disabled=!undoSt.length;u.title=undoSt.length?'Undo: '+undoSt.at(-1).label:'Nothing to undo'}
+function details(){
+ const p=sel?.k==='p'&&P(sel.id),l=sel?.k==='l'&&D().links.find(x=>x.id===sel.id);
+ let t='Nothing selected',m=' ',b='Click a post to read it here.\n\n• Drag posts to arrange the discussion.\n• Double-click empty space to add a post.\n• Right-click a post for more options.\n• Use Search to highlight posts by keyword or author.',c=[],btn='';
+ if(p){t=p.title;m=p.author+' · '+p.createdAt;b=p.body||'(no message text)';
+  D().links.forEach(x=>{if(x.from===p.id){const o=P(x.to);c.push([o.id,`→ ${LT[x.type]}: ${o.title}`])}else if(x.to===p.id){const o=P(x.from);c.push([o.id,`← ${o.title} (${LT[x.type].toLowerCase()} this)`])}});
+  btn='<button data-a="reply">Reply</button><button data-a="edit">Edit</button><button data-a="del">Delete</button>'}
+ else if(l){const f=P(l.from),o=P(l.to);t='Connection';m=LT[l.type];
+  b=`"${f.title}" by ${f.author}\n\n${LT[l.type].toLowerCase()}\n\n"${o.title}" by ${o.author}`;
+  c=[[f.id,'Responding post: '+f.title],[o.id,'Original post: '+o.title]];btn='<button data-a="del">Delete</button>'}
+ $('dt').textContent=t;$('dm').textContent=m;$('db').textContent=b;
+ $('cn').innerHTML=c.map(([id,s])=>`<button class="cn" data-go="${id}">${esc(s)}</button>`).join('');
+ $('dbtn').innerHTML=btn}
+
+function ask(title,fields,ok,msg){return new Promise(res=>{const f=$('f'),dlg=$('dlg');
+ f.innerHTML=`<h2>${esc(title)}</h2>${msg?`<p>${esc(msg)}</p>`:''}`+fields.map(x=>`<label>${esc(x.label)}${x.req?' *':''}${x.type==='area'?`<textarea name="${x.name}" rows="6">${esc(x.value||'')}</textarea>`:x.type==='select'?`<select name="${x.name}">${Object.entries(x.options).map(([k,v])=>`<option value="${k}">${esc(v)}</option>`).join('')}</select>`:`<input name="${x.name}" value="${esc(x.value||'')}">`}</label>`).join('')+`<div class="err" id="err" role="alert"></div><div class="btns"><button type="button" id="no">Cancel</button><button class="pri">${esc(ok)}</button></div>`;
+ const done=v=>{dlg.close();res(v)};
+ f.onsubmit=e=>{e.preventDefault();const v={};fields.forEach(x=>v[x.name]=f.elements[x.name].value.trim());
+  const bad=fields.find(x=>x.req&&!v[x.name]);if(bad){$('err').textContent=bad.err;f.elements[bad.name].focus();return}done(v)};
+ $('no').onclick=()=>done(null);dlg.oncancel=()=>res(null);dlg.showModal();
+ const ff=fields.find(x=>x.focus)||fields[0];if(ff)f.elements[ff.name].focus()})}
+const pf=(p,reply)=>[...(reply?[{name:'type',label:'Response type',type:'select',options:LT}]:[]),
+ {name:'author',label:'Author',req:1,value:p?p.author:lastAuthor,err:'Please enter an author name.',focus:!(p?p.author:lastAuthor)},
+ {name:'title',label:'Title',req:1,value:p?.title,err:'Please enter a title.',focus:!!(p?p.author:lastAuthor)},
+ {name:'body',label:'Message',type:'area',value:p?.body}];
+function mk(v,x,y){lastAuthor=v.author;return{id:S.next++,author:v.author,title:v.title,body:v.body,createdAt:now(),x:Math.max(0,Math.round(x)),y:Math.max(0,Math.round(y))}}
+async function newPost(x,y){const v=await ask('New post',pf(),'Add post');if(!v)return;push('New post');const p=mk(v,x,y);D().posts.push(p);after();pick('p',p.id,1);say(`Added "${p.title}".`)}
+function free(par){const y=par.y+NH+70;for(let r=0;r<4;r++)for(const dx of[0,220,-220,440,-440,660]){const x=par.x+dx,yy=y+r*110;if(x<0)continue;
+ if(!D().posts.some(o=>x-15<o.x+NW&&x+NW+15>o.x&&yy-15<o.y+NH&&yy+NH+15>o.y))return{x,y:yy}}return{x:par.x+30,y}}
+async function reply(id){const par=P(id);if(!par)return;const v=await ask('Respond to post',pf(null,1),'Add post','Responding to: '+par.title);if(!v)return;
+ push('Reply');const s=free(par),p=mk(v,s.x,s.y);D().posts.push(p);D().links.push({id:S.next++,from:p.id,to:par.id,type:v.type});after();pick('p',p.id,1);
+ say(`Added response "${p.title}" (${LT[v.type].toLowerCase()} "${par.title}").`)}
+async function edit(id){const p=P(id);if(!p)return;const v=await ask('Edit post',pf(p),'Save changes');if(!v)return;push('Edit');
+ Object.assign(p,{author:v.author,title:v.title,body:v.body});lastAuthor=v.author;after();say(`Saved changes to "${p.title}".`)}
+function del(){if(linkSrc!=null)return cancelLink();if(!sel)return;const d=D();
+ if(sel.k==='p'){const p=P(sel.id),n=d.links.filter(l=>l.from===p.id||l.to===p.id).length;push('Delete post');
+  d.posts=d.posts.filter(x=>x!==p);d.links=d.links.filter(l=>l.from!==p.id&&l.to!==p.id);sel=null;after();
+  say(`Deleted "${p.title}"${n?` and ${n} connection(s)`:''}. Press Ctrl+Z to undo.`)}
+ else{push('Delete link');d.links=d.links.filter(l=>l.id!==sel.id);sel=null;after();say('Deleted connection. Press Ctrl+Z to undo.')}}
+function startLink(){if(sel?.k!=='p')return;linkSrc=sel.id;mouse=null;$('scroll').classList.add('linking');say(`Click the post that "${P(linkSrc).title}" responds to. (Esc to cancel)`);paint()}
+function cancelLink(){if(linkSrc==null)return;linkSrc=null;$('scroll').classList.remove('linking');paint()}
+async function addLink(f,t){
+ if(D().links.some(l=>(l.from===f.id&&l.to===t.id)||(l.from===t.id&&l.to===f.id))){say('Those two posts are already connected.');return}
+ const v=await ask('Connect posts',[{name:'type',label:`How does "${f.title}" relate to "${t.title}"?`,type:'select',options:LT}],'Connect');
+ if(!v){say('Link cancelled.');return}
+ push('Link');D().links.push({id:S.next++,from:f.id,to:t.id,type:v.type});after();say(`Connected: "${f.title}" ${LT[v.type].toLowerCase()} "${t.title}".`)}
+
+function open(id){curId=id;undoSt=[];sel=null;linkSrc=null;save();draw();$('scroll').scrollTo(0,0)}
+async function newDisc(){const v=await ask('New discussion',[{name:'t',label:'Name',req:1,err:'Please enter a name.'}],'Create');if(!v)return;
+ const d={id:S.next++,title:v.t,posts:[],links:[]};S.discs.push(d);open(d.id);say(`Created "${d.title}". Double-click the canvas to add the first post.`)}
+async function renDisc(){const v=await ask('Rename discussion',[{name:'t',label:'New name',req:1,value:D().title,err:'Please enter a name.'}],'Rename');if(!v)return;D().title=v.t;after()}
+async function delDisc(){const d=D(),v=await ask('Delete discussion',[],'Delete',`Delete "${d.title}" and its ${d.posts.length} post(s)? This cannot be undone.`);if(!v)return;
+ S.discs=S.discs.filter(x=>x!==d);if(!S.discs.length)S.discs.push({id:S.next++,title:'Untitled discussion',posts:[],links:[]});open(S.discs[0].id);say(`Deleted "${d.title}".`)}
+function exp(){const a=document.createElement('a');a.href=URL.createObjectURL(new Blob([JSON.stringify(S,null,2)],{type:'application/json'}));
+ a.download='digedit-export.json';a.click();setTimeout(()=>URL.revokeObjectURL(a.href),1000);say('Exported all discussions to digedit-export.json.')}
+$('file').onchange=async e=>{const f=e.target.files[0];e.target.value='';if(!f)return;
+ try{const j=JSON.parse(await f.text());if(!Array.isArray(j.discs))throw 0;let n=0;
+  j.discs.forEach(d=>{const m={},nd={id:S.next++,title:String(d.title||'Imported'),posts:[],links:[]};
+   (d.posts||[]).forEach(p=>{m[p.id]=S.next;nd.posts.push({id:S.next++,author:String(p.author||'?'),title:String(p.title||'Untitled'),body:String(p.body||''),createdAt:String(p.createdAt||now()),x:+p.x||0,y:+p.y||0})});
+   (d.links||[]).forEach(l=>{if(m[l.from]&&m[l.to]&&LT[l.type])nd.links.push({id:S.next++,from:m[l.from],to:m[l.to],type:l.type})});
+   S.discs.push(nd);n++});
+  save();open(S.discs.at(-1).id);say(`Imported ${n} discussion(s).`)}
+ catch(err){say('Import failed: that file is not a DigEdit export.')}};
+
+const W=$('world'),wpt=e=>{const r=W.getBoundingClientRect();return{x:(e.clientX-r.left)/zoom,y:(e.clientY-r.top)/zoom}};
+W.addEventListener('pointerdown',e=>{if(e.button)return;const c=e.target.closest('.card'),l=e.target.closest('.lk');
+ if(linkSrc!=null){const f=P(linkSrc);cancelLink();if(c&&+c.dataset.id!==f.id)addLink(f,P(+c.dataset.id));return}
+ if(c){const p=P(+c.dataset.id),w=wpt(e),before=snap();pick('p',p.id);c.style.zIndex=++zTop;drag={p,c,ox:w.x-p.x,oy:w.y-p.y,x0:p.x,y0:p.y,before}}
+ else if(l)pick('l',+l.dataset.id);else pick(null)});
+addEventListener('pointermove',e=>{
+ if(drag){const w=wpt(e);drag.p.x=Math.max(0,Math.round(w.x-drag.ox));drag.p.y=Math.max(0,Math.round(w.y-drag.oy));
+  drag.c.style.left=drag.p.x+'px';drag.c.style.top=drag.p.y+'px';links();return}
+ if(linkSrc!=null){mouse=wpt(e);links()}});
+addEventListener('pointerup',()=>{if(!drag)return;const{p,x0,y0,before}=drag;drag=null;
+ if(p.x!==x0||p.y!==y0){undoSt.push({label:'Move',before});save();size();acts();say(`Moved "${p.title}".`)}});
+W.addEventListener('dblclick',e=>{const c=e.target.closest('.card');if(c)return edit(+c.dataset.id);if(e.target.closest('.lk'))return;const w=wpt(e);newPost(w.x-NW/2,w.y-NH/2)});
+W.addEventListener('contextmenu',e=>{e.preventDefault();cancelLink();const c=e.target.closest('.card'),l=e.target.closest('.lk'),w=wpt(e);let it;
+ if(c){pick('p',+c.dataset.id);it=[['Edit',()=>edit(sel.id)],['Reply',()=>reply(sel.id)],['Link…',startLink],['Delete',del]]}
+ else if(l){const k=D().links.find(x=>x.id===+l.dataset.id);pick('l',k.id);it=[['Go to responding post',()=>pick('p',k.from,1)],['Go to original post',()=>pick('p',k.to,1)],['Delete',del]]}
+ else it=[['New post here',()=>newPost(w.x,w.y)]];
+ const m=$('menu');m.innerHTML='';it.forEach(([t,f])=>{const b=document.createElement('button');b.textContent=t;b.onclick=()=>{m.hidden=true;f()};m.append(b)});
+ m.style.left=Math.min(e.clientX,innerWidth-200)+'px';m.style.top=Math.min(e.clientY,innerHeight-180)+'px';m.hidden=false});
+addEventListener('pointerdown',e=>{if(!e.target.closest('#menu'))$('menu').hidden=true},true);
+$('scroll').addEventListener('wheel',e=>{if(e.ctrlKey||e.metaKey){e.preventDefault();setZoom(zoom*(e.deltaY<0?1.1:1/1.1))}},{passive:false});
+addEventListener('resize',size);
+
+const A={newDisc,renDisc,delDisc,
+ newPost:()=>{const s=$('scroll');newPost((s.scrollLeft+s.clientWidth/2)/zoom-NW/2,(s.scrollTop+s.clientHeight/2)/zoom-NH/2)},
+ reply:()=>reply(sel?.id),link:startLink,edit:()=>edit(sel?.id),del,undo,
+ zin:()=>setZoom(zoom*1.15),zout:()=>setZoom(zoom/1.15),exp,imp:()=>$('file').click()};
+document.addEventListener('click',e=>{const b=e.target.closest('[data-a]');if(b&&!b.disabled)A[b.dataset.a]();
+ const g=e.target.closest('[data-go]');if(g)pick('p',+g.dataset.go,1)});
+$('disc').onchange=e=>open(+e.target.value);
+$('hc').onchange=e=>document.body.classList.toggle('hc',e.target.checked);
+$('q').oninput=e=>{q=e.target.value.trim().toLowerCase();paint();
+ const n=D().posts.filter(match).length;say(!q?'Search cleared.':n?`${n} post(s) match "${e.target.value.trim()}". Press Enter to jump between them.`:`No posts match "${e.target.value.trim()}".`)};
+$('q').onkeydown=e=>{if(e.key==='Enter')nextMatch();if(e.key==='Escape'){e.target.value='';e.target.dispatchEvent(new Event('input'))}};
+function nextMatch(){if(!q)return;const m=D().posts.filter(match).sort((a,b)=>a.id-b.id);if(!m.length)return;let i=0;
+ if(sel?.k==='p'){const k=m.findIndex(p=>p.id===sel.id);if(k>=0)i=(k+1)%m.length}
+ pick('p',m[i].id,1);say(`Match ${i+1} of ${m.length}.`)}
+addEventListener('keydown',e=>{const typing=/INPUT|TEXTAREA|SELECT/.test(e.target.tagName);
+ if(e.key==='Escape'){$('menu').hidden=true;if(linkSrc!=null){cancelLink();say('Link cancelled.')}else if(!typing&&!$('dlg').open)pick(null);return}
+ if(typing||$('dlg').open)return;
+ if((e.ctrlKey||e.metaKey)&&e.key.toLowerCase()==='z'){e.preventDefault();undo()}
+ else if((e.key==='Delete'||e.key==='Backspace')&&sel){e.preventDefault();del()}});
+
+load();draw();say('Welcome to DigEdit. Drag posts to arrange them, double-click to edit, right-click for options.');
+</script>
+</body>
+</html>
