@@ -36,6 +36,7 @@ dialog input,dialog textarea,dialog select{width:100%}
 .err{color:#c0392b;min-height:1.3em;margin-top:4px}
 .row{display:flex;gap:8px;justify-content:flex-end;margin-top:10px}
 .pri{background:var(--sel);color:#fff;border-color:var(--sel)}
+.who{color:var(--sub)}.tabs{display:flex;gap:6px;margin-bottom:6px}.tabs button[aria-pressed=true]{background:var(--sel);color:#fff;border-color:var(--sel)}
 @media(max-width:800px){main{grid-template-columns:1fr;grid-template-rows:1fr auto}aside{border-left:0;border-top:1px solid var(--line);max-height:38vh}}
 </style></head><body>
 <div class="bar" role="toolbar">
@@ -46,7 +47,7 @@ dialog input,dialog textarea,dialog select{width:100%}
  <button id="bUndo">Undo</button>
  <span class="g"><button id="bZo" aria-label="Zoom out">–</button><button id="bZi" aria-label="Zoom in">+</button></span>
  <button id="bExp">Export</button><button id="bImp">Import</button><input type="file" id="file" accept=".json" hidden>
- <span class="sp"></span><label for="q">Search</label><input id="q" type="search" placeholder="Title, author or text" style="width:170px">
+ <span class="sp"></span><label for="q">Search</label><input id="q" type="search" placeholder="Title, author or text" style="width:170px"><span class="who" id="who"></span><button id="bOut">Log out</button>
 </div>
 <main>
  <div id="cv"></div>
@@ -64,6 +65,8 @@ dialog input,dialog textarea,dialog select{width:100%}
 </main>
 <footer><span id="st"></span><span id="stats"></span></footer>
 <div id="menu"></div>
+<dialog id="ad"><form id="af"><h3 style="margin:0 0 6px">Welcome to DigEdit</h3><div class="tabs"><button type="button" id="tLog" aria-pressed="true">Log in</button><button type="button" id="tSign" aria-pressed="false">Sign up</button></div>
+<label for="au">Username</label><input id="au" autocomplete="username"><label for="ap">Password</label><input id="ap" type="password" autocomplete="current-password"><div id="ac" hidden><label for="ap2">Confirm password</label><input id="ap2" type="password" autocomplete="new-password"></div><div class="err" id="ae"></div><div class="row"><button type="submit" class="pri" id="aok">Log in</button></div><p style="color:var(--sub);font-size:12px;margin:8px 0 0">Demo accounts are stored only in this browser.</p></form></dialog>
 <dialog id="pd"><form method="dialog" id="pf">
  <h3 id="ph" style="margin:0 0 6px"></h3><div id="pc"></div>
  <div id="lt" hidden><label for="pt">Response type</label><select id="pt"><option value="REPLY">Reply to</option><option value="AGREE">Agrees with</option><option value="DISAGREE">Disagrees with</option></select></div>
@@ -145,12 +148,12 @@ function details(){
   $("#body").textContent=`“${f.title}” by ${f.author}\n\n${LBL[l.type].toLowerCase()}\n\n“${t.title}” by ${t.author}`;
   item(f.id,"Responding post: "+f.title);item(t.id,"Original post: "+t.title);btn("Delete",del)}
  else{$("#dt").textContent="Nothing selected";$("#meta").textContent="";$("#body").textContent="Click a post to read it here.\n\n• Drag posts to arrange the discussion.\n• Double-click empty space to add a post.\n• Right-click a post for more options.\n• Use Search to highlight posts by keyword or author."}}
-function acts(){const ps=!!(sel&&P(sel));$("#bRep").disabled=$("#bEdit").disabled=!ps;$("#bLink").disabled=!ps||!!linkSrc;$("#bDel").disabled=!(ps||selL);
+function acts(){const ps=!!(sel&&P(sel));$("#bRep").disabled=!ps;$("#bEdit").disabled=!ps||!can(P(sel));$("#bLink").disabled=!ps||!!linkSrc;$("#bDel").disabled=!((ps&&can(P(sel)))||selL);
  $("#bUndo").disabled=!undo.length;$("#bUndo").textContent=undo.length?undo[undo.length-1].label:"Undo"}
 function pick(id){sel=id;selL=null;render();const p=P(id),cv=$("#cv");if(p){cv.scrollTo({left:Math.max(0,(p.x-80)*zoom),top:Math.max(0,(p.y-80)*zoom),behavior:"smooth"})}}
 const pd=$("#pd");let pcb=null;
 function dlg(head,ex,parent,cb){$("#ph").textContent=head;$("#pc").innerHTML=parent?`Responding to: <b>${esc(parent.title)}</b>`:"";$("#lt").hidden=!parent;
- $("#pa").value=ex?ex.author:(localStorage.getItem("digedit.author")||"");$("#pti").value=ex?ex.title:"";$("#pb").value=ex?ex.body:"";$("#pe").textContent="";
+ $("#pa").value=ex?ex.author:user;$("#pa").readOnly=!ex||!!ex.u;$("#pti").value=ex?ex.title:"";$("#pb").value=ex?ex.body:"";$("#pe").textContent="";
  $("#pok").textContent=ex?"Save changes":"Add post";pcb=cb;pd.showModal();($("#pa").value?$("#pti"):$("#pa")).focus()}
 $("#pcn").onclick=()=>pd.close();
 $("#pf").onsubmit=e=>{const a=$("#pa").value.trim(),t=$("#pti").value.trim();
@@ -158,7 +161,7 @@ $("#pf").onsubmit=e=>{const a=$("#pa").value.trim(),t=$("#pti").value.trim();
  if(!t){e.preventDefault();$("#pe").textContent="Enter a title.";$("#pti").focus();return}
  try{localStorage.setItem("digedit.author",a)}catch(x){}
  pcb({author:a,title:t,body:$("#pb").value.trim(),type:$("#pt").value})};
-function mk(v,x,y){return{id:S.n++,d:cur,author:v.author,title:v.title,body:v.body,createdAt:now(),x:Math.max(0,Math.round(x)),y:Math.max(0,Math.round(y))}}
+function mk(v,x,y){return{id:S.n++,d:cur,u:user,author:v.author,title:v.title,body:v.body,createdAt:now(),x:Math.max(0,Math.round(x)),y:Math.max(0,Math.round(y))}}
 function newPost(x,y){if(x==null){const c=$("#cv");x=(c.scrollLeft+c.clientWidth/2)/zoom-W/2;y=(c.scrollTop+c.clientHeight/2)/zoom-H/2}
  dlg("New post",null,null,v=>{push("Undo New Post");const p=mk(v,x,y);S.posts.push(p);sel=p.id;selL=null;save();render();status(`Added “${p.title}”.`)})}
 function reply(){const par=sel&&P(sel);if(!par)return;
@@ -166,8 +169,9 @@ function reply(){const par=sel&&P(sel);if(!par)return;
   outer:for(let r=0;r<4;r++)for(const dx of [0,220,-220,440,-440,660]){const cx=par.x+dx;if(cx<0)continue;
    if(!posts().some(p=>cx-15<p.x+W&&cx+W+15>p.x&&y+r*110-15<p.y+H&&y+r*110+H+15>p.y)){x=cx;y+=r*110;ok=true;break outer}}
   if(!ok)x=par.x+30;const p=mk(v,x,y);S.posts.push(p);S.links.push({id:S.n++,d:cur,from:p.id,to:par.id,type:v.type});sel=p.id;selL=null;save();render();status(`Added response “${p.title}”.`)})}
-function edit(id){const p=P(id||sel);if(!p)return;dlg("Edit post",p,null,v=>{push("Undo Edit");Object.assign(p,{author:v.author,title:v.title,body:v.body});save();render();status(`Saved changes to “${p.title}”.`)})}
+function edit(id){const p=P(id||sel);if(!p)return;if(!can(p)){status("You can only edit your own posts.");return}dlg("Edit post",p,null,v=>{push("Undo Edit");Object.assign(p,{author:v.author,title:v.title,body:v.body});save();render();status(`Saved changes to “${p.title}”.`)})}
 function del(){if(linkSrc){cancelLink();return}
+ if(sel&&P(sel)&&!can(P(sel))){status("You can only delete your own posts.");return}
  if(sel&&P(sel)){const p=P(sel),n=links().filter(l=>l.from===p.id||l.to===p.id).length;push("Undo Delete Post");S.posts=S.posts.filter(x=>x.id!==p.id);S.links=S.links.filter(l=>l.from!==p.id&&l.to!==p.id);sel=null;save();render();status(`Deleted “${p.title}”${n?` and ${n} connection(s)`:""}. Press Ctrl+Z to undo.`)}
  else if(selL){push("Undo Delete Link");S.links=S.links.filter(l=>l.id!==selL);selL=null;save();render();status("Deleted connection. Press Ctrl+Z to undo.")}}
 function startLink(){if(!sel)return;linkSrc={id:sel,m:null};status(`Click the post that “${P(sel).title}” responds to. (Esc to cancel)`);render()}
@@ -221,5 +225,26 @@ addEventListener("keydown",e=>{const m=e.ctrlKey||e.metaKey,typing=/INPUT|TEXTAR
  else if(m&&e.key==="l"){e.preventDefault();startLink()}else if(m&&e.key==="e"){e.preventDefault();edit()}else if(m&&e.key==="f"){e.preventDefault();$("#q").focus()}
  else if(e.key==="Delete"||e.key==="Backspace"){del()}});
 addEventListener("click",e=>{if(!e.target.closest("#menu"))menu(0)});
+let user=null;const can=p=>!!p&&(!p.u||p.u===user);
+const U=()=>{try{return JSON.parse(localStorage.getItem("digedit.users"))||{}}catch(e){return{}}};
+const hex=b=>[...new Uint8Array(b)].map(x=>x.toString(16).padStart(2,"0")).join("");
+async function hash(pw,salt){const e=new TextEncoder();
+ if(window.crypto&&crypto.subtle){const k=await crypto.subtle.importKey("raw",e.encode(pw),"PBKDF2",false,["deriveBits"]);return hex(await crypto.subtle.deriveBits({name:"PBKDF2",salt:e.encode(salt),iterations:100000,hash:"SHA-256"},k,256))}
+ let h=5381;for(const c of salt+pw)h=((h<<5)+h+c.charCodeAt(0))|0;return"x"+h}
+let signup=false;const ad=$("#ad");
+function mode(s){signup=s;$("#tLog").setAttribute("aria-pressed",!s);$("#tSign").setAttribute("aria-pressed",s);$("#ac").hidden=!s;$("#aok").textContent=s?"Create account":"Log in";$("#ae").textContent="";$("#ap").autocomplete=s?"new-password":"current-password"}
+$("#tLog").onclick=()=>mode(false);$("#tSign").onclick=()=>mode(true);
+ad.addEventListener("cancel",e=>e.preventDefault());
+$("#af").onsubmit=async e=>{e.preventDefault();const n=$("#au").value.trim(),pw=$("#ap").value,us=U(),err=m=>{$("#ae").textContent=m};
+ if(!/^[\w.-]{2,24}$/.test(n))return err("Username: 2–24 letters, numbers, . _ -");
+ const k=n.toLowerCase();
+ if(signup){if(pw.length<6)return err("Password needs at least 6 characters.");if(pw!==$("#ap2").value)return err("Passwords don’t match.");if(us[k])return err("That username is taken.");
+  const salt=Math.random().toString(36).slice(2);us[k]={name:n,salt,hash:await hash(pw,salt)};try{localStorage.setItem("digedit.users",JSON.stringify(us))}catch(x){return err("Could not save the account in this browser.")}}
+ else{const a=us[k];if(!a||a.hash!==await hash(pw,a.salt))return err("Wrong username or password.")}
+ login(us[k].name)};
+function login(n){user=n;try{localStorage.setItem("digedit.session",n)}catch(e){}if(ad.open)ad.close();$("#af").reset();$("#who").textContent="Signed in as "+n;render();status("Welcome, "+n+".")}
+function logout(){user=null;sel=selL=null;linkSrc=null;try{localStorage.removeItem("digedit.session")}catch(e){}$("#who").textContent="";render();mode(false);ad.showModal();$("#au").focus()}
+$("#bOut").onclick=logout;
 render();status("Welcome to DigEdit. Drag posts to arrange them, double-click to edit, right-click for options.");
+{let s=null;try{s=localStorage.getItem("digedit.session")}catch(e){}if(s&&U()[s.toLowerCase()])login(s);else ad.showModal()}
 </script></body></html>
